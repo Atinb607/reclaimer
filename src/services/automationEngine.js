@@ -57,14 +57,17 @@ async function triggerAutomation(leadId, companyId, triggerType, eventId) {
         idempotencyKey,
       });
 
-      // Log the job
+      // ── FIX: delay_minutes is now passed as a parameter ($7) instead of
+      //         being interpolated into the SQL string. This eliminates the
+      //         template literal injection risk entirely.
       await db.query(
         `INSERT INTO jobs_log (company_id, lead_id, job_id, job_type, status, payload, scheduled_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '${rule.delay_minutes} minutes')
+         VALUES ($1, $2, $3, $4, $5, $6, NOW() + ($7 * INTERVAL '1 minute'))
          ON CONFLICT (job_id) DO NOTHING`,
         [
           companyId, leadId, idempotencyKey, 'automation-message',
-          'pending', JSON.stringify({ ruleId: rule.id, eventId })
+          'pending', JSON.stringify({ ruleId: rule.id, eventId }),
+          rule.delay_minutes,
         ]
       );
 

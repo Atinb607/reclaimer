@@ -107,25 +107,40 @@ router.post(
 
       const { From, Body, MessageSid } = req.body;
 
-      const result = await handleInboundSMS({
-        from: From,
-        body: Body,
-        messageSid: MessageSid,
-      });
+      const result = await handleInboundSMS({ from: From, body: Body, messageSid: MessageSid });
 
-      if (result) {
-        // Schedule async reply handling
+      // ── Keyword actions ────────────────────────────────────────────────────
+      if (result?.action === 'stop') {
+        return res.type('text/xml').send(
+          '<Response><Message>You have been unsubscribed and will receive no further messages. Reply START to resubscribe.</Message></Response>'
+        );
+      }
+
+      if (result?.action === 'start') {
+        return res.type('text/xml').send(
+          '<Response><Message>You have been resubscribed and may receive messages again.</Message></Response>'
+        );
+      }
+
+      if (result?.action === 'help') {
+        return res.type('text/xml').send(
+          '<Response><Message>For support, reply STOP to unsubscribe or contact us directly.</Message></Response>'
+        );
+      }
+
+      // ── Normal reply — schedule async handling ─────────────────────────────
+      if (result?.action === 'reply') {
         await scheduleWebhookJob({
           type: 'inbound_sms_reply',
           payload: { leadId: result.leadId, companyId: result.companyId },
         });
       }
 
-      // Twilio expects TwiML response
+      // Always respond 200 to Twilio
       res.type('text/xml').send('<Response></Response>');
     } catch (err) {
       logger.error('Twilio inbound webhook error:', err);
-      res.type('text/xml').send('<Response></Response>'); // Always respond 200 to Twilio
+      res.type('text/xml').send('<Response></Response>');
     }
   }
 );

@@ -1,6 +1,7 @@
 const twilio = require('twilio');
 const db = require('../models/db');
 const logger = require('../utils/logger');
+const { normalizePhone } = require('../utils/phone');
 
 let client;
 
@@ -87,48 +88,101 @@ async function sendSMS({ companyId, leadId, ruleId = null, body, toPhone }) {
 
 /**
  * Validate a Twilio webhook request signature
+ * Handles reverse proxy (nginx, Railway, Render) via X-Forwarded-Proto
  */
 function validateTwilioSignature(req) {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   if (!authToken) return false;
- 
+
   const signature = req.headers['x-twilio-signature'];
   if (!signature) return false;
- 
+
   // Behind a reverse proxy, req.protocol is 'http' — use the forwarded header
   const protocol = req.headers['x-forwarded-proto'] || req.protocol;
   const host = req.headers['x-forwarded-host'] || req.get('host');
   const url = `${protocol}://${host}${req.originalUrl}`;
- 
+
   return twilio.validateRequest(authToken, signature, url, req.body);
 }
 
+// ─── Keyword lists (TCPA-required) ────────────────────────────────────────────
+const STOP_KEYWORDS  = ['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit'];
+const START_KEYWORDS = ['start', 'yes', 'unstop'];
+const HELP_KEYWORDS  = ['help', 'info'];
+
 /**
- * Handle an inbound SMS from Twilio
+ * Handle an inbound SMS from Twilio.
+ * Detects STOP/START/HELP keywords and responds accordingly (TCPA-compliant).
+ * For all other messages, stores the record and signals lead replied.
  */
 async function handleInboundSMS({ from, body, messageSid }) {
   logger.info('Inbound SMS received', { from, messageSid });
 
+  const normalizedFrom = normalizePhone(from);
+  const keyword = (body || '').trim().toLowerCase();
+
+  // ── STOP ──────────────────────────────────────────────────────────────────
+  if (STOP_KEYWORDS.includes(keyword)) {
+    logger.info('STOP keyword received, marking lead DNC', { from: normalizedFrom });
+
+    await db.query(
+      `UPDATE leads
+       SET status = 'do_not_contact', has_replied = TRUE,
+           last_reply_at = NOW(), updated_at = NOW()
+       WHERE phone = $1 AND deleted_at IS NULL`,
+      [normalizedFrom]
+    );
+
+    await db.query(
+      `INSERT INTO messages (company_id, lead_id, direction, body, status, provider, provider_sid)
+       SELECT company_id, id, 'inbound', $1, 'received', 'twilio', $2
+       FROM leads WHERE phone = $3 AND deleted_at IS NULL`,
+      [body, messageSid, normalizedFrom]
+    );
+
+    return { action: 'stop', phone: normalizedFrom };
+  }
+
+  // ── START ─────────────────────────────────────────────────────────────────
+  if (START_KEYWORDS.includes(keyword)) {
+    logger.info('START keyword received, re-enabling lead', { from: normalizedFrom });
+
+    await db.query(
+      `UPDATE leads
+       SET status = 'new', has_replied = FALSE, updated_at = NOW()
+       WHERE phone = $1 AND status = 'do_not_contact' AND deleted_at IS NULL`,
+      [normalizedFrom]
+    );
+
+    return { action: 'start', phone: normalizedFrom };
+  }
+
+  // ── HELP ──────────────────────────────────────────────────────────────────
+  if (HELP_KEYWORDS.includes(keyword)) {
+    logger.info('HELP keyword received', { from: normalizedFrom });
+    return { action: 'help', phone: normalizedFrom };
+  }
+
+  // ── Normal reply ──────────────────────────────────────────────────────────
   const { rows: [lead] } = await db.query(
     `SELECT l.id, l.company_id FROM leads l
      WHERE l.phone = $1 AND l.deleted_at IS NULL
      ORDER BY l.created_at DESC LIMIT 1`,
-    [from]
+    [normalizedFrom]
   );
 
   if (!lead) {
-    logger.warn('Inbound SMS from unknown number', { from });
+    logger.warn('Inbound SMS from unknown number', { from: normalizedFrom });
     return null;
   }
 
-  // Store inbound message
   await db.query(
     `INSERT INTO messages (company_id, lead_id, direction, body, status, provider, provider_sid)
      VALUES ($1, $2, 'inbound', $3, 'received', 'twilio', $4)`,
     [lead.company_id, lead.id, body, messageSid]
   );
 
-  return { leadId: lead.id, companyId: lead.company_id };
+  return { action: 'reply', leadId: lead.id, companyId: lead.company_id };
 }
 
 /**

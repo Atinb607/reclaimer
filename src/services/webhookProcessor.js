@@ -1,6 +1,7 @@
 const db = require('../models/db');
 const logger = require('../utils/logger');
 const { triggerAutomation, handleLeadReply } = require('./automationEngine');
+const { normalizePhone } = require('../utils/phone');
 
 /**
  * Process different webhook payload types
@@ -84,12 +85,5 @@ async function processInboundReply({ leadId, companyId }) {
   return handleLeadReply(leadId, companyId);
 }
 
-function normalizePhone(phone) {
-  if (!phone) return phone;
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits[0] === '1') return `+${digits}`;
-  return phone.startsWith('+') ? phone : `+${digits}`;
-}
 
 module.exports = { processWebhookPayload, processMissedCall, processFormSubmission };

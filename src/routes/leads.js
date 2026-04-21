@@ -3,6 +3,7 @@ const db = require('../models/db');
 const logger = require('../utils/logger');
 const { authenticate, authorizeCompany } = require('../middleware/auth');
 const { validate, createLeadSchema, updateLeadSchema } = require('../middleware/validators');
+const { normalizePhone } = require('../utils/phone');
 
 const router = express.Router();
 
@@ -178,12 +179,5 @@ router.delete('/:id', async (req, res, next) => {
     next(err);
   }
 });
-
-function normalizePhone(phone) {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits[0] === '1') return `+${digits}`;
-  return phone.startsWith('+') ? phone : `+${digits}`;
-}
 
 module.exports = router;

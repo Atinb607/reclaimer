@@ -20,6 +20,8 @@ const healthRoutes = require('./routes/health');
 const companiesRoutes = require('./routes/companies');
 
 const app = express();
+
+// Trust reverse proxy (nginx, Railway, Render) — required for Twilio signature verification
 app.set('trust proxy', 1);
 
 // ─── Sentry (must be first) ───────────────────────────────────────────────────
@@ -73,6 +75,9 @@ app.use(Handlers.errorHandler());
 app.use(errorHandler);
 
 // ─── Startup ──────────────────────────────────────────────────────────────────
+// Only start the HTTP server when run directly (node src/index.js).
+// When required by tests (require('../src/index')), just export the app
+// so supertest can bind its own ephemeral port — no EADDRINUSE.
 async function start() {
   try {
     await db.connect();
@@ -108,6 +113,11 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-start();
+// ── KEY FIX: only call start() when this file is run directly ─────────────────
+// require.main === module  →  true when: node src/index.js
+// require.main === module  →  false when: require('../src/index') from tests
+if (require.main === module) {
+  start();
+}
 
 module.exports = app;

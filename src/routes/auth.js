@@ -69,6 +69,11 @@ router.post('/register', authLimiter, validate(registerSchema), async (req, res,
       },
     });
   } catch (err) {
+    // Postgres unique violation — race condition between the SELECT check and INSERT
+    // e.g. two concurrent registrations with the same email
+    if (err.code === '23505' && err.constraint === 'users_email_key') {
+      return res.status(409).json({ success: false, error: 'Email already registered' });
+    }
     next(err);
   }
 });
