@@ -1,17 +1,29 @@
 const { Pool } = require('pg');
 const logger = require('../utils/logger');
 
+// Support both DATABASE_URL (Render/Heroku style) and individual DB_* vars
+const poolConfig = process.env.DATABASE_URL
+  ? {
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : false,
+    }
+  : {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      database: process.env.DB_NAME || 'saas_automation',
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD,
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
+    };
+
 const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || 'saas_automation',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD,
+  ...poolConfig,
   min: parseInt(process.env.DB_POOL_MIN) || 2,
   max: parseInt(process.env.DB_POOL_MAX) || 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
 });
 
 pool.on('error', (err) => {

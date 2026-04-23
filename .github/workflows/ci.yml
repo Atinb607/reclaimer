@@ -52,6 +52,10 @@ jobs:
       REDIS_PORT: 6379
       JWT_SECRET: test_jwt_secret_not_for_production
       ENCRYPTION_KEY: test_encryption_key_32chars_!!
+      TWILIO_ACCOUNT_SID: ACtest
+      TWILIO_AUTH_TOKEN: test_token
+      TWILIO_PHONE_NUMBER: "+15550000000"
+      PORT: 3001
 
     steps:
       - name: Checkout
