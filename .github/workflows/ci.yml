@@ -51,7 +51,7 @@ jobs:
       REDIS_HOST: localhost
       REDIS_PORT: 6379
       JWT_SECRET: test_jwt_secret_not_for_production
-      ENCRYPTION_KEY: test_encryption_key_32chars_here!
+      ENCRYPTION_KEY: test_encryption_key_32chars_!!
 
     steps:
       - name: Checkout

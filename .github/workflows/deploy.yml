@@ -1,0 +1,101 @@
+# .github/workflows/deploy.yml
+# Runs only on push to main (i.e. when a PR is merged).
+# Builds a Docker image, pushes to GitHub Container Registry (ghcr.io),
+# then SSHes into your server and pulls + restarts the containers.
+#
+# Required GitHub Secrets (set in repo Settings → Secrets → Actions):
+#   DEPLOY_HOST       — your server IP or hostname
+#   DEPLOY_USER       — SSH username (e.g. ubuntu)
+#   DEPLOY_SSH_KEY    — private SSH key (the full PEM contents)
+#   DEPLOY_PATH       — absolute path to your project on the server
+#                       (e.g. /home/ubuntu/saas-automation)
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ── Step 1: CI must pass first ─────────────────────────────────────────────
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  # ── Step 2: Build and push Docker image ────────────────────────────────────
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Step 3: Deploy to server ───────────────────────────────────────────────
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            # Pull latest image
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker pull ghcr.io/${{ github.repository }}:latest
+
+            # Run migrations before restarting (safe — IF NOT EXISTS on all tables)
+            docker-compose run --rm backend npm run migrate
+
+            # Restart backend and worker with zero-downtime
+            docker-compose up -d --no-deps backend worker
+
+            # Clean up old images
+            docker image prune -f
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Deploy failed for commit ${{ github.sha }}"
+          # Add your notification here (Slack webhook, email, etc.)

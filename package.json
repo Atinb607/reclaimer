@@ -9,7 +9,7 @@
     "worker": "node src/workers/automationWorker.js",
     "migrate": "node src/models/migrate.js",
     "seed": "node src/models/seed.js",
-    "test": "jest --runInBand",
+    "test": "jest --runInBand --forceExit",
     "lint": "eslint src/"
   },
   "dependencies": {
