@@ -1,61 +1,62 @@
+'use strict';
+
 const { Pool } = require('pg');
 const logger = require('../utils/logger');
 
-// Support both DATABASE_URL (Render/Heroku style) and individual DB_* vars
-const poolConfig = process.env.DATABASE_URL
-  ? {
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production'
-        ? { rejectUnauthorized: false }
-        : false,
-    }
-  : {
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT) || 5432,
-      database: process.env.DB_NAME || 'saas_automation',
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD,
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
-    };
+let poolConfig;
 
-const pool = new Pool({
-  ...poolConfig,
-  min: parseInt(process.env.DB_POOL_MIN) || 2,
-  max: parseInt(process.env.DB_POOL_MAX) || 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-});
+// ── Support both DATABASE_URL (Render/cloud) and individual vars (local) ──────
+if (process.env.DATABASE_URL) {
+  poolConfig = {
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    max: parseInt(process.env.DB_POOL_MAX || '10'),
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  };
+} else {
+  poolConfig = {
+    host:     process.env.DB_HOST     || 'localhost',
+    port:     parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME     || 'saas_automation',
+    user:     process.env.DB_USER     || 'postgres',
+    password: process.env.DB_PASSWORD || 'localpassword',
+    ssl:      process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    max:      parseInt(process.env.DB_POOL_MAX || '10'),
+    idleTimeoutMillis:      30000,
+    connectionTimeoutMillis: 10000,
+  };
+}
 
-pool.on('error', (err) => {
-  logger.error('Unexpected database pool error:', err);
-});
+const pool = new Pool(poolConfig);
 
+// ── Connection event logging ───────────────────────────────────────────────────
 pool.on('connect', () => {
   logger.debug('New database client connected');
 });
 
-/**
- * Execute a single query
- */
-async function query(text, params) {
+pool.on('error', (err) => {
+  logger.error('Unexpected database pool error', { error: err.message });
+});
+
+// ── Query helper with logging ──────────────────────────────────────────────────
+const query = async (text, params) => {
   const start = Date.now();
   try {
     const result = await pool.query(text, params);
     const duration = Date.now() - start;
-    if (duration > 500) {
-      logger.warn('Slow query detected', { text, duration, rows: result.rowCount });
+    if (duration > 1000) {
+      logger.warn('Slow query detected', { duration, text: text.substring(0, 100) });
     }
     return result;
   } catch (err) {
-    logger.error('Database query error', { text, params, error: err.message });
+    logger.error('Database query error', { error: err.message, text, params });
     throw err;
   }
-}
+};
 
-/**
- * Execute multiple queries in a transaction
- */
-async function transaction(callback) {
+// ── Transaction helper ─────────────────────────────────────────────────────────
+const withTransaction = async (callback) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -64,34 +65,21 @@ async function transaction(callback) {
     return result;
   } catch (err) {
     await client.query('ROLLBACK');
-    logger.error('Transaction rolled back:', err.message);
     throw err;
   } finally {
     client.release();
   }
-}
+};
 
-/**
- * Get a raw client for complex operations
- */
-async function getClient() {
-  return pool.connect();
-}
-
-/**
- * Test connection
- */
-async function connect() {
+// ── Startup connectivity check ─────────────────────────────────────────────────
+const connect = async () => {
   const client = await pool.connect();
-  await client.query('SELECT 1');
-  client.release();
-}
+  try {
+    await client.query('SELECT 1');
+    logger.info('✅ Database connected');
+  } finally {
+    client.release();
+  }
+};
 
-/**
- * Close all connections
- */
-async function end() {
-  await pool.end();
-}
-
-module.exports = { query, transaction, getClient, connect, end, pool };
+module.exports = { query, pool, withTransaction, connect };
