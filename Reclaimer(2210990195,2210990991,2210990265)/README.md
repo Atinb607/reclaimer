@@ -11,7 +11,7 @@
 
 ---
 
-## Project Description
+## Project Description📒
 
 
 Multi-tenant SMS automation platform for service businesses (HVAC, plumbing, etc.). Captures inbound leads from missed calls and form submissions, then drives multi-step SMS follow-up sequences that auto-stop on reply.
@@ -259,7 +259,7 @@ Book a free estimate: {{booking_link}}
 
 ---
 
-## 📁 Project Structure
+## 📁 Source Code Structure
 
 ```
 src/
