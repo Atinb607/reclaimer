@@ -1,4 +1,18 @@
-# 🚀 SaaS Automation Platform
+# 🚀 RECLAIMER - SaaS Automation Platform
+
+## 📋 Name & Roll No. of the members:
+### Atin Bhardwaj - 2210990195
+### Aryan Nadaan - 2210990991
+### Devesh Sharma - 2210990265
+
+---
+
+## 📝Type - Copyright
+
+---
+
+## Project Description
+
 
 Multi-tenant SMS automation platform for service businesses (HVAC, plumbing, etc.). Captures inbound leads from missed calls and form submissions, then drives multi-step SMS follow-up sequences that auto-stop on reply.
 
@@ -13,8 +27,8 @@ Multi-tenant SMS automation platform for service businesses (HVAC, plumbing, etc
 └─────────────────┘    └─────────────────┘    └──────────────────┘
          │                      │                       │
          ▼                      ▼                       │
-┌─────────────────┐    ┌─────────────────┐             │
-│  Redis (BullMQ) │    │  Twilio API     │             │
+┌─────────────────┐    ┌─────────────────┐              │
+│  Redis (BullMQ) │    │  Twilio API     │              │
 │  (Job Queues)   │    │  (SMS Send)     │◀────────────┘
 └─────────────────┘    └─────────────────┘
 ```
