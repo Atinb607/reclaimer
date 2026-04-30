@@ -234,7 +234,7 @@ async function migrate() {
     }
 
     logger.info(`  ⬆  Applying migration ${migration.version}: ${migration.name}`);
-    await db.transaction(async (client) => {
+    await db.withTransaction(async (client) => {
       await client.query(migration.up);
       await client.query(
         'INSERT INTO schema_migrations (version, name) VALUES ($1, $2)',
