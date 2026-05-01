@@ -26,7 +26,21 @@ export default function Login() {
           last_name: form.last_name,
         })
       }
-      login(data.token, data.user)
+
+      // Handle any token shape the backend might return
+      const token = data.token
+        || data.access_token
+        || data.accessToken
+        || data.data?.token
+        || data.data?.access_token
+
+      if (!token) {
+        console.error('Full response:', JSON.stringify(data))
+        setErr('Login succeeded but no token received. Check console for response shape.')
+        return
+      }
+
+      login(token, data.user || data.data?.user || {})
     } catch (e) {
       setErr(e.message)
     } finally {
