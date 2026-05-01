@@ -99,7 +99,7 @@ async function start() {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully...');
-  await db.end();
+  await db.pool.end()
   await redis.quit();
   process.exit(0);
 });

@@ -1,6 +1,7 @@
 const BASE = 'https://reclaimer.onrender.com'
 
 let _token = localStorage.getItem('rcl_token') || null
+let _companyId = localStorage.getItem('rcl_company') || null
 
 export const setToken = (t) => {
   _token = t
@@ -8,7 +9,14 @@ export const setToken = (t) => {
   else localStorage.removeItem('rcl_token')
 }
 
+export const setCompanyId = (id) => {
+  _companyId = id
+  if (id) localStorage.setItem('rcl_company', id)
+  else localStorage.removeItem('rcl_company')
+}
+
 export const getToken = () => _token
+export const getCompanyId = () => _companyId
 
 const req = async (method, path, body) => {
   const headers = { 'Content-Type': 'application/json' }
@@ -23,6 +31,8 @@ const req = async (method, path, body) => {
   return data
 }
 
+const cid = () => _companyId
+
 export const api = {
   // Auth
   login:    (email, password) => req('POST', '/auth/login', { email, password }),
@@ -33,16 +43,16 @@ export const api = {
   healthDetailed: () => req('GET', '/health/detailed'),
 
   // Leads
-  getLeads:   (page = 1, limit = 20) => req('GET', `/leads?page=${page}&limit=${limit}`),
-  createLead: (body)                  => req('POST', '/leads', body),
+  getLeads:   (page = 1, limit = 20) => req('GET', `/leads?page=${page}&limit=${limit}&company_id=${cid()}`),
+  createLead: (body)                  => req('POST', '/leads', { ...body, company_id: cid() }),
   getLead:    (id)                    => req('GET', `/leads/${id}`),
   updateLead: (id, body)              => req('PUT', `/leads/${id}`, body),
   deleteLead: (id)                    => req('DELETE', `/leads/${id}`),
 
   // Automation rules
-  getRules:   ()     => req('GET', '/automation/rules'),
-  getStats:   ()     => req('GET', '/automation/stats'),
-  createRule: (body) => req('POST', '/automation/rules', body),
+  getRules:   () => req('GET', `/automation/rules?company_id=${cid()}`),
+  getStats:   () => req('GET', `/automation/stats?company_id=${cid()}`),
+  createRule: (body) => req('POST', '/automation/rules', { ...body, company_id: cid() }),
   toggleRule: (id, active) => req('PUT', `/automation/rules/${id}`, { is_active: active }),
 
   // Webhooks

@@ -64,7 +64,7 @@ export default function Health() {
         <ServiceCard
           icon={<Database size={18} />}
           name="PostgreSQL"
-          status={data?.services?.database || data?.database}
+          status={data?.checks?.database?.status === 'ok'}
           loading={loading}
           detail="Primary data store"
           color="var(--blue)"
@@ -72,7 +72,7 @@ export default function Health() {
         <ServiceCard
           icon={<Cpu size={18} />}
           name="Redis / Valkey"
-          status={data?.services?.redis || data?.redis}
+          status={data?.checks?.redis?.status === 'ok'}
           loading={loading}
           detail="Queue & cache"
           color="var(--orange)"
