@@ -25,7 +25,7 @@ router.post('/register', authLimiter, validate(registerSchema), async (req, res,
 
     const password_hash = await bcrypt.hash(password, 12);
 
-    const result = await db.transaction(async (client) => {
+    const result = await db.withTransaction(async (client) => {
       // Create user
       const { rows: [user] } = await client.query(
         `INSERT INTO users (email, password_hash, first_name, last_name, role)
