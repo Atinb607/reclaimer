@@ -14,15 +14,26 @@ router.use(webhookLimiter);
 // POST /webhooks/missed-call
 router.post('/missed-call', validate(missedCallWebhookSchema), async (req, res, next) => {
   try {
-    const { company_id, caller_phone, caller_name, metadata } = req.body;
+    let { company_id, caller_phone, caller_name, metadata } = req.body;
 
-    // Validate company exists
-    const { rows: [company] } = await db.query(
-      'SELECT id FROM companies WHERE id = $1 AND is_active = TRUE AND deleted_at IS NULL',
-      [company_id]
-    );
-    if (!company) {
-      return res.status(404).json({ success: false, error: 'Company not found' });
+    // If company_id not provided, fall back to the first active company
+    if (!company_id) {
+      const { rows: [first] } = await db.query(
+        'SELECT id FROM companies WHERE is_active = TRUE AND deleted_at IS NULL ORDER BY created_at ASC LIMIT 1'
+      );
+      if (!first) {
+        return res.status(404).json({ success: false, error: 'No active company found' });
+      }
+      company_id = first.id;
+    } else {
+      // Validate the provided company_id exists
+      const { rows: [company] } = await db.query(
+        'SELECT id FROM companies WHERE id = $1 AND is_active = TRUE AND deleted_at IS NULL',
+        [company_id]
+      );
+      if (!company) {
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
     }
 
     // Queue the webhook for async processing

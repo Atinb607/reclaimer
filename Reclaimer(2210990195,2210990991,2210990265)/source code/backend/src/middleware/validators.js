@@ -59,7 +59,7 @@ const updateAutomationRuleSchema = Joi.object({
 
 // ─── Webhooks ─────────────────────────────────────────────────────────────────
 const missedCallWebhookSchema = Joi.object({
-  company_id: Joi.string().uuid().required(),
+  company_id: Joi.string().uuid().optional().allow('', null),  // optional — resolved from auth or first active company
   caller_phone: Joi.string().required(),
   caller_name: Joi.string().allow('', null),
   called_at: Joi.string().isoDate().allow(null),
