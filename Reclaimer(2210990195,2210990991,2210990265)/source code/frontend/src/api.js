@@ -56,5 +56,12 @@ export const api = {
   toggleRule: (id, active) => req('PUT', `/automation/rules/${id}`, { is_active: active }),
 
   // Webhooks
-  missedCall: (body) => req('POST', '/webhooks/missed-call', body),
+  missedCall: (body) => {
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const { company_id, ...rest } = body
+    const payload = (company_id && UUID_RE.test(company_id))
+      ? { ...rest, company_id }
+      : rest
+    return req('POST', '/webhooks/missed-call', payload)
+  },
 }
